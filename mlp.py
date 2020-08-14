@@ -132,7 +132,7 @@ class MLP():
 
 #dataset reading
 data = pd.read_csv('files/iris.csv', sep = ',', header = None)
-print(data.shape)
+#print(data.shape)
 data = data.to_numpy()
 Xtrain = data[0:, 0:4].T
 Ytrain = data[0:, 4:7].T
@@ -150,16 +150,5 @@ Ytest = mlp.forwardProp(Xtrain)
 #writing results to csv file
 pd.DataFrame(Ytest.T).to_csv("files/testResults.csv", header=None, index=None)
 
-
-"""
-Xtrain = np.array([[1, 1, 0, 0],
-					[0, 1, 1, 0]])
-Ytrain = np.array([[1, 0, 1, 0]])
-
-mlp = MLP(2, 4, 1)
-mlp.backProp(Xtrain, Ytrain, [0.1, 50, 1])
-resp = mlp.forwardProp(Xtrain)
-print(resp)
-"""
 
 plt.show()
