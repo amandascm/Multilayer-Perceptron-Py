@@ -64,6 +64,7 @@ class MLP():
 		learningRate, epochs, batchSize = parameters
 
 		errorList = []
+		qtBatch = 0
 		for epoch in range(0, epochs):
 			#randomize train samples to avoid overfitting
 			X, Y = skl.shuffle(X.T, Y.T)	#shuffle lines
@@ -71,64 +72,53 @@ class MLP():
 			Y = Y.T
 
 			#batches
-			for batch in range(0, int(len(X[0])/batchSize)):
-				Xbatch = X[0:len(X), batch*batchSize:batch*batchSize+batchSize]
-				Ybatch = Y[0:len(Y), batch*batchSize:batch*batchSize+batchSize]
+			qtCases = int(len(X[0]))
+			qtBatch = int(int(len(X[0])/batchSize))
+			if (int(len(X[0]))%batchSize > 0):
+				qtBatch+=1
 
-				#initialize matrix of gradient's sum for each weight and bias
-				W1Grad = np.zeros([self.hid1Length, self.inLength])
-				B1Grad = np.zeros([self.hid1Length, 1])
-				WoutGrad = np.zeros([self.outLength, self.hid1Length])
-				BoutGrad = np.zeros([self.outLength, 1])
+			for batch in range(0, qtBatch):
+				if batch == qtBatch:
+					Xbatch = X[0:len(X), batch*batchSize:batch*batchSize+(qtCases - batch*batchSize)]
+					Ybatch = Y[0:len(Y), batch*batchSize:batch*batchSize+(qtCases - batch*batchSize)]
+					batchSize = qtCases - batch*batchSize
+				else:
+					Xbatch = X[0:len(X), batch*batchSize:batch*batchSize+batchSize]
+					Ybatch = Y[0:len(Y), batch*batchSize:batch*batchSize+batchSize]
 
-				cost = 0
-				qtCases = 0
-				for i in range(0, batchSize):
-					#forward propagation
-					Results = self.forwardProp(Xbatch[0:,i:i+1])
+				res = self.forwardProp(Xbatch) # h2 x batchSize
+				costsum = 1/batchSize*float(np.sum((np.sum((res - Ybatch)**2, axis = 0, keepdims = True)), axis = 1, keepdims = True))
 
-					#calculating error
-					cost += float(np.sum(((Results - Ybatch[0:,i:i+1])**2), axis = 0))
+				dZout = -2*(res - Ybatch)*(self.sigmoidFunc(res, deriv = True)) # h2 x batchSize
 
-					#backpropagation of the error
-					#output layer
-					deltaOut = -2*(Results - Ybatch[0:,i:i+1])*self.sigmoidFunc(Results, deriv = True)
-					#column matrix with delta value for each unit from output layer
+				# dZout(h2 x batchSize) * A1(h1 x batchSize).T
+				dWout = (1/batchSize)*np.dot(dZout, self.a1.T)
 
-					#first layer
-					deltaH1 = np.reshape((np.sum(self.Wout*deltaOut, axis = 0).T), (self.hid1Length, 1))*(self.sigmoidFunc(self.a1, deriv = True))
-					#column matrix with delta value for each hidden unit from the first hidden layer
+				dbout = (1/batchSize)*np.sum(dZout, axis = 1, keepdims = True) # h2 x 1
 
+				dZ1 = np.dot(self.Wout.T, dZout)*(self.sigmoidFunc(self.a1, deriv = True)) # h1 x batchSize
 
-					#getting gradients sum
-					#output layer
-					WoutGrad += np.dot(deltaOut, self.a1.T)
-					BoutGrad += deltaOut
+				#dZ1(h1 x batchSize) * X(x x batchSize).T
+				dW1 = (1/batchSize)*np.dot(dZ1, Xbatch.T)
 
-					#first hidden layer
-					W1Grad += np.dot(deltaH1, Xbatch[0:,i:i+1].T)
-					B1Grad += deltaH1
-
-					qtCases += 1
+				db1 = (1/batchSize)*np.sum(dZ1, axis = 1, keepdims = True) # h1 x 1	
 
 				#updating parameters after each processed mini-batch
-				self.Wout += 1*learningRate*WoutGrad/batchSize
-				self.Bout += 1*learningRate*BoutGrad/batchSize
-				self.W1 += 1*learningRate*W1Grad/batchSize
-				self.B1 += 1*learningRate*B1Grad/batchSize
+				self.Wout += learningRate*dWout
+				self.Bout += learningRate*dbout
+				self.W1 += learningRate*dW1
+				self.B1 += learningRate*db1
 				
-				#average cost of the epoch processed
-				errorList.append((cost/qtCases))
+				#average cost of the mini-batch processed
+				errorList.append(costsum)
 				#print(error/qtCases)
 
 		#plot average cost per mini batch
 		plt.figure(1)
-		plt.plot(range(0,epochs*int(len(X[0])/batchSize)), errorList, 'm')
-		#plt.plot(range(0,epochs), errorList, 'm')
+		plt.plot(range(0,epochs*qtBatch), errorList, 'm')
 		plt.xlabel('Mini-batch')
 		plt.ylabel('Average cost')
 		plt.title('Average cost with Mini-Batch Gradient Descent')
-
 
 #dataset reading
 data = pd.read_csv('files/iris.csv', sep = ',', header = None)
@@ -137,18 +127,14 @@ data = data.to_numpy()
 Xtrain = data[0:, 0:4].T
 Ytrain = data[0:, 4:7].T
 
-
 #training neural network
 mlp = MLP(4, 8, 3)	#inLength, hidLength, outLength
-mlp.backProp(Xtrain, Ytrain, [0.01, 10000, 10])	#learningRate, amount of epochs, mini-batch size
-
+mlp.backProp(Xtrain, Ytrain, [0.01, 10000, 15])	#learningRate, amount of epochs, mini-batch size
 
 #testing neural network
 Ytest = mlp.forwardProp(Xtrain)
 
-
 #writing results to csv file
 pd.DataFrame(Ytest.T).to_csv("files/testResults.csv", header=None, index=None)
-
 
 plt.show()
